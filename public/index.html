@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    .diagram {
+      width: 500px;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h3 {
+      margin-bottom: 20px;
+    }
+
+    body {
+      padding: 50px;
+    }
+
+    .group-select {
+      margin-bottom: 30px;
+    }
+
+    @media only screen and (max-width: 600px) {
+      body {
+        padding: 20px;
+      }
+
+      .diagram {
+        width: 320px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="diagram">
+    <h3>Статистика последнего онлайна</h3>
+    <select class="group-select custom-select"></select>
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <script>
+    let currentDiagram = null;
+    let members = [];
+    let relationData = {};
+
+    async function render(groupId) {
+      await getMembers(groupId);
+
+      const diagramData = [
+        relationData.mobile,
+        relationData.iphone,
+        relationData.ipad,
+        relationData.android,
+        relationData.windowsPhone,
+        relationData.windows,
+        relationData.desktop,
+      ];
+      drawDiagram(diagramData);
+    }
+
+    async function getMembers(group) {
+      const response = await axios.get(`/get-group-members?group=${group}`);
+      members = response.data;
+
+      relationData = {
+        mobile: 0,
+        iphone: 0,
+        ipad: 0,
+        android: 0,
+        windowsPhone: 0,
+        windows: 0,
+        desktop: 0,
+      };
+
+      members.forEach((member) => {
+        relationData[member.slug] += 1;
+      });
+
+      console.log(relationData);
+    }
+
+    function drawDiagram(diagramData) {
+      const data = {
+        labels: [
+          "мобильная версия",
+          "приложение для iPhone",
+          "приложение для iPad",
+          "приложение для Android",
+          "приложение для Windows Phone",
+          "приложение для Windows 10",
+          "полная версия сайта",
+        ],
+        datasets: [
+          {
+            label: "My First Dataset",
+            data: diagramData,
+            backgroundColor: ["red", "green", "blue", "yellow", "orange", "pink", "brown"],
+            hoverOffset: 4,
+          },
+        ],
+      };
+
+      const config = {
+        type: "pie",
+        data: data,
+        options: {},
+      };
+
+      if (currentDiagram) {
+        currentDiagram.destroy();
+      }
+      currentDiagram = new Chart(document.getElementById("myChart"), config);
+    }
+
+    async function main() {
+      const savedGroups = await axios.get("/get-saved-groups");
+      if (savedGroups.data.length == 0) {
+        alert("Не найдено просканнированных групп");
+        return;
+      }
+
+      const groupsInfo = [];
+
+      for (let i = 0; i < savedGroups.data.length; i++) {
+        let group = savedGroups.data[i].replaceAll(".json", "");
+
+        let groupInfo = await axios.get(`/get-group-info?group=${group}`);
+
+        if (groupInfo.data.error) {
+          alert('Неверный токен, обновите токен');
+          return;
+        }
+
+        groupInfo = groupInfo.data.response[0].name;
+        groupsInfo.push({
+          id: group,
+          name: groupInfo,
+        });
+      }
+
+      const groupsSelect = document.querySelector(".group-select");
+
+      groupsInfo.forEach((group) => {
+        const option = document.createElement("option");
+        option.value = group.id;
+        option.innerHTML = group.name;
+        groupsSelect.append(option);
+      });
+
+      groupsSelect.addEventListener("change", async (e) => {
+        await render(e.target.value);
+      });
+
+      await render(groupsInfo[0].id);
+    }
+
+    main();
+  </script>
+</body>
+
+</html>
